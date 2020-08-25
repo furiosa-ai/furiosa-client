@@ -3,7 +3,6 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use log::info;
-use reqwest;
 use reqwest::blocking::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -45,7 +44,7 @@ pub enum ClientError {
     #[error("FURIOSA_ACCESS_KEY_ID, FURIOSA_SECRET_ACCESS_KEY must be set")]
     NoApiKey,
     #[error("ApiError: {0}")]
-    ApiError(String)
+    ApiError(String),
 }
 
 impl ClientError {
@@ -60,7 +59,7 @@ impl From<dotenv::Error> for ClientError {
             dotenv::Error::Io(e) => ClientError::Io(e),
             dotenv::Error::LineParse(line, error_idx) => ClientError::ConfigParse(line, error_idx),
             dotenv::Error::EnvVar(e) => ClientError::ConfigEnvVar(e),
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 }
@@ -87,7 +86,7 @@ pub enum SourceFormat {
     Ldfg,
     Cdfg,
     Gir,
-    Lir
+    Lir,
 }
 
 impl SourceFormat {
@@ -112,7 +111,7 @@ pub enum TargetFormat {
     Cdfg,
     Gir,
     Lir,
-    Enf
+    Enf,
 }
 
 impl TargetFormat {
@@ -136,11 +135,12 @@ pub struct FuriosaClient {
 }
 
 fn credential_file_path() -> Option<PathBuf> {
-    dirs::home_dir().map(|home| {
-        let mut path = PathBuf::from(home);
-        path.push(".furiosa/credential");
-        path
-    }).filter(|p| p.exists())
+    dirs::home_dir()
+        .map(|mut home| {
+            home.push(".furiosa/credential");
+            home
+        })
+        .filter(|p| p.exists())
 }
 
 fn get_credential_from_file() -> Result<(), ClientError> {
@@ -148,7 +148,10 @@ fn get_credential_from_file() -> Result<(), ClientError> {
         dotenv::from_path(path)?;
         Ok(())
     } else {
-        Err(ClientError::io_error(io::ErrorKind::NotFound, "credential file not found"))
+        Err(ClientError::io_error(
+            io::ErrorKind::NotFound,
+            "credential file not found",
+        ))
     }
 }
 
@@ -158,18 +161,17 @@ impl FuriosaClient {
 
         // Try to read $HOME/.furiosa/credential and set credentials to environment variables
         match get_credential_from_file() {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(ClientError::Io(_)) => {
                 // ignore the file not found error because it's optional
-            },
-            Err(e) => return Err(e)
+            }
+            Err(e) => return Err(e),
         };
 
         // Try to get both KEYs and exist if KEYs are not set
-        let access_key_id = std::env::var(ACCESS_KEY_ID_ENV)
-            .map_err(|_| ClientError::NoApiKey)?;
-        let secret_access_key = std::env::var(SECRET_ACCESS_KEY_ENV)
-            .map_err(|_| ClientError::NoApiKey)?;
+        let access_key_id = std::env::var(ACCESS_KEY_ID_ENV).map_err(|_| ClientError::NoApiKey)?;
+        let secret_access_key =
+            std::env::var(SECRET_ACCESS_KEY_ENV).map_err(|_| ClientError::NoApiKey)?;
 
         let client = reqwest::blocking::Client::builder()
             .user_agent(USER_AGENT)
@@ -179,29 +181,37 @@ impl FuriosaClient {
         Ok(FuriosaClient {
             client,
             access_key_id,
-            secret_access_key
+            secret_access_key,
         })
     }
 
-    pub fn compile_from_file<P: AsRef<Path>>(&self, src_format: SourceFormat, target_format: TargetFormat,
-                             path: P) -> Result<Box<[u8]>, ClientError> {
+    pub fn compile_from_file<P: AsRef<Path>>(
+        &self,
+        src_format: SourceFormat,
+        target_format: TargetFormat,
+        path: P,
+    ) -> Result<Box<[u8]>, ClientError> {
         let path = path.as_ref();
-        let filename = path.file_name().map(|f| f.to_str().expect("invalid filename"));
+        let filename = path
+            .file_name()
+            .map(|f| f.to_str().expect("invalid filename"));
         let buf = std::fs::read(path)?;
         Ok(self.compile(src_format, target_format, buf, filename)?)
     }
 
-    pub fn compile<F: AsRef<str>>(&self,
-                                  src_format: SourceFormat,
-                                  target_format: TargetFormat,
-                                  binary: Vec<u8>,
-                                  filename: Option<F>) -> Result<Box<[u8]>, ClientError> {
-
+    pub fn compile<F: AsRef<str>>(
+        &self,
+        src_format: SourceFormat,
+        target_format: TargetFormat,
+        binary: Vec<u8>,
+        filename: Option<F>,
+    ) -> Result<Box<[u8]>, ClientError> {
         let mut model_image = Part::bytes(binary);
         if let Some(filename) = filename {
             model_image = model_image.file_name(filename.as_ref().to_string());
         }
-        model_image = model_image.mime_str(APPLICATION_OCTET_STREAM_MIME)
+        model_image = model_image
+            .mime_str(APPLICATION_OCTET_STREAM_MIME)
             .expect("Invalid MIME type");
 
         let target_spec: BTreeMap<String, i64> =
@@ -210,11 +220,19 @@ impl FuriosaClient {
         let form: Form = Form::new()
             .text(SOURCE_FORMAT_PART_NAME, src_format.as_str().to_string())
             .text(TARGET_FORMAT_PART_NAME, target_format.as_str().to_string())
-            .text(TARGET_NPU_SPEC_PART_NAME, serde_json::to_string(&target_spec).unwrap())
+            .text(
+                TARGET_NPU_SPEC_PART_NAME,
+                serde_json::to_string(&target_spec).unwrap(),
+            )
             .part(SOURCE_PART_NAME, model_image);
 
-        let response = self.client.post(&api_v1_path("compiler"))
-            .header(REQUEST_ID_HTTP_HEADER, Uuid::new_v4().to_hyphenated().to_string())
+        let response = self
+            .client
+            .post(&api_v1_path("compiler"))
+            .header(
+                REQUEST_ID_HTTP_HEADER,
+                Uuid::new_v4().to_hyphenated().to_string(),
+            )
             .header(ACCESS_KEY_ID_HTTP_HEADER, &self.access_key_id)
             .header(SECRET_ACCESS_KEY_HTTP_HEADER, &self.secret_access_key)
             .multipart(form)
@@ -225,15 +243,20 @@ impl FuriosaClient {
                 if res.status().is_success() {
                     match res.bytes() {
                         Ok(bytes) => Ok(bytes.to_vec().into_boxed_slice()),
-                        Err(e) => Err(ApiError(format!("fail to fetch the compiled binary: {}", e)))
+                        Err(e) => Err(ApiError(format!(
+                            "fail to fetch the compiled binary: {}",
+                            e
+                        ))),
                     }
                 } else {
-                    let response: ApiResponse = res.json().unwrap();
-                    eprintln!("{:?}", &response);
-                    return Err(ApiError(format!("fail to compile: {}", &response.message)));
+                    let response: ApiResponse = match res.json() {
+                        Ok(api_response) => api_response,
+                        Err(e) => return Err(ApiError(format!("fail to get API response: {}", e))),
+                    };
+                    Err(ApiError(format!("fail to compile: {}", &response.message)))
                 }
-            },
-            Err(e) => Err(ApiError(format!("{}", e)))
+            }
+            Err(e) => Err(ApiError(format!("{}", e))),
         }
     }
 }
