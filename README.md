@@ -10,12 +10,12 @@ If you build with the feature 'local_api', it will embed the `http://localhost:8
 It will be useful for debugging.
 
 To build the library and executable files using local API endpoint:
-```
+```sh
 cargo build --features "local_api"
 ```
 
 To build the library and executable files using production API endpoint:
-```
+```sh
 cargo build --release --features "production_api"
 ```
 
@@ -23,7 +23,7 @@ Both require API keys.
 Please watch [this video](https://drive.google.com/file/d/1DLj4i6SEvGeq5eDnemTK15Trajamc8LW/view?usp=sharing) 
 in order to learn how to generate API keys.
 
-# How to Set API keys
+# How to set API keys
 
 
 ## Shell environment variables
@@ -35,7 +35,7 @@ export FURIOSA_SECRET_ACCESS_KEY=YYYYYYYYYYYYYYYYYYYYYYYYYY
 
 ## Credential file
 Please put your API keys at `$HOME/.furiosa/credential` as follow:
-```
+```sh
 FURIOSA_ACCESS_KEY_ID=XXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 FURIOSA_SECRET_ACCESS_KEY=YYYYYYYYYYYYYYYYYYYYYYYYYY
 ```
