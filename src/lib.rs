@@ -1,6 +1,5 @@
-use std::collections::BTreeMap;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::{PathBuf};
 
 use log::info;
 use reqwest::blocking::multipart::{Form, Part};
@@ -9,6 +8,7 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use crate::ClientError::ApiError;
+use serde_json::Value;
 
 static ACCESS_KEY_ID_ENV: &str = "FURIOSA_ACCESS_KEY_ID";
 static SECRET_ACCESS_KEY_ENV: &str = "FURIOSA_SECRET_ACCESS_KEY";
@@ -20,9 +20,10 @@ static ACCESS_KEY_ID_HTTP_HEADER: &str = "X-FuriosaAI-Access-Key-ID";
 static SECRET_ACCESS_KEY_HTTP_HEADER: &str = "X-FuriosaAI-Secret-Access-KEY";
 static REQUEST_ID_HTTP_HEADER: &str = "X-Request-Id";
 
+static TARGET_NPU_SPEC_PART_NAME: &str = "target_npu_spec";
+static COMPILER_CONFIG_PART_NAME: &str = "compiler_config";
 static SOURCE_FORMAT_PART_NAME: &str = "source_format";
 static TARGET_FORMAT_PART_NAME: &str = "target_format";
-static TARGET_NPU_SPEC_PART_NAME: &str = "target_npu_spec";
 static SOURCE_PART_NAME: &str = "source";
 
 fn api_v1_path(path: &str) -> String {
@@ -128,6 +129,45 @@ impl TargetFormat {
     }
 }
 
+pub struct CompileRequest {
+    target_npu_spec: Value,
+    compiler_config: Option<Value>,
+    source_format: Option<SourceFormat>,
+    target_format: TargetFormat,
+    filename: Option<String>,
+    source: Vec<u8>,
+}
+
+impl CompileRequest {
+    pub fn new<S: AsRef<[u8]>>(target_npu_spec: Value, target_format: TargetFormat, source: S)
+            -> CompileRequest {
+        CompileRequest {
+            target_npu_spec,
+            compiler_config: None,
+            source_format: None,
+            target_format,
+            filename: None,
+            source: source.as_ref().to_vec(),
+
+        }
+    }
+
+    pub fn source_format(mut self, source_format: SourceFormat) -> CompileRequest {
+        self.source_format = Some(source_format);
+        self
+    }
+
+    pub fn compile_config(mut self, compile_config: Value) -> CompileRequest {
+        self.compiler_config = Some(compile_config);
+        self
+    }
+
+    pub fn filename(mut self, filename: &str) -> CompileRequest {
+        self.filename = Some(filename.to_string());
+        self
+    }
+}
+
 pub struct FuriosaClient {
     client: reqwest::blocking::Client,
     access_key_id: String,
@@ -185,46 +225,32 @@ impl FuriosaClient {
         })
     }
 
-    pub fn compile_from_file<P: AsRef<Path>>(
+    pub fn compile(
         &self,
-        src_format: SourceFormat,
-        target_format: TargetFormat,
-        path: P,
+        request: CompileRequest,
     ) -> Result<Box<[u8]>, ClientError> {
-        let path = path.as_ref();
-        let filename = path
-            .file_name()
-            .map(|f| f.to_str().expect("invalid filename"));
-        let buf = std::fs::read(path)?;
-        Ok(self.compile(src_format, target_format, buf, filename)?)
-    }
+        let mut model_image = Part::bytes(request.source.clone());
+        model_image = model_image.file_name(request.filename.unwrap_or("noname".to_string()));
 
-    pub fn compile<F: AsRef<str>>(
-        &self,
-        src_format: SourceFormat,
-        target_format: TargetFormat,
-        binary: Vec<u8>,
-        filename: Option<F>,
-    ) -> Result<Box<[u8]>, ClientError> {
-        let mut model_image = Part::bytes(binary);
-        if let Some(filename) = filename {
-            model_image = model_image.file_name(filename.as_ref().to_string());
-        }
         model_image = model_image
             .mime_str(APPLICATION_OCTET_STREAM_MIME)
             .expect("Invalid MIME type");
 
-        let target_spec: BTreeMap<String, i64> =
-            serde_yaml::from_str(include_str!("../configs/64dpes.yml")).unwrap();
-
-        let form: Form = Form::new()
-            .text(SOURCE_FORMAT_PART_NAME, src_format.as_str().to_string())
-            .text(TARGET_FORMAT_PART_NAME, target_format.as_str().to_string())
+        let mut form: Form = Form::new()
+            .text(TARGET_FORMAT_PART_NAME, request.target_format.as_str().to_string())
             .text(
                 TARGET_NPU_SPEC_PART_NAME,
-                serde_json::to_string(&target_spec).unwrap(),
+                serde_json::to_string(&request.target_npu_spec).unwrap(),
             )
             .part(SOURCE_PART_NAME, model_image);
+
+        if let Some(src_format) = &request.source_format {
+            form = form.text(SOURCE_FORMAT_PART_NAME, src_format.as_str().to_string());
+        };
+
+        if let Some(compiler_config) = &request.compiler_config {
+            form = form.text(COMPILER_CONFIG_PART_NAME, serde_json::to_string(compiler_config).unwrap());
+        };
 
         let response = self
             .client
