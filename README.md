@@ -1,6 +1,24 @@
 # Furiosa Web Service API Client
 This is a client of Furiosa Web service API.
 
+# Example
+
+To run the following example, you should get an API key and set the key according to [the instruction](https://github.com/furiosa-ai/furiosa-client#how-to-set-api-keys).
+
+```rust
+use furiosa_client::{FuriosaClient, SourceFormat, TargetFormat};
+
+let client = FuriosaClient::new().unwrap();
+let result = client.compile_from_file(
+      SourceFormat::Tflite,
+      TargetFormat::Enf,
+      "models/tflite/MNISTnet_uint8_quant.tflite",
+);
+let enf_binary: Box<[u8]> = result.unwrap();
+```
+
+Please see a full example at the [integration tests](https://github.com/furiosa-ai/furiosa-client/blob/master/tests/integration_test.rs).
+
 # Building
 
 The library embeds the API endpoint depending on a specified cargo feature. 
@@ -24,7 +42,6 @@ Please watch [this video](https://drive.google.com/file/d/1DLj4i6SEvGeq5eDnemTK1
 in order to learn how to generate API keys.
 
 # How to set API keys
-
 
 ## Shell environment variables
 Please set the two environment variables as follow and then run your program:
