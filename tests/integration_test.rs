@@ -2,6 +2,7 @@ use furiosa_client::{CompileRequest, FuriosaClient};
 use serde_json::Value;
 
 #[test]
+#[ignore]
 fn test_compile() {
     env_logger::init();
 
