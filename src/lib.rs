@@ -1,3 +1,15 @@
+//! Furiosa API client
+//!
+//! # Authencation of API Key
+//! Furiosa API client will try to read $HOME/.furiosa/credential or
+//! FURIOSA_ACCESS_KEY_ID and FURIOSA_SECRET_ACCESS_KEY from environment variables.
+//!
+//! $HOME/.furiosa/credential file should be as follow:
+//! ```sh
+//! FURIOSA_ACCESS_KEY_ID=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+//! FURIOSA_SECRET_ACCESS_KEY=YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY
+//! ```
+
 use std::io;
 use std::path::PathBuf;
 

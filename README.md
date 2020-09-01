@@ -8,13 +8,13 @@ To run the following example, you should get an API key and set the key accordin
 ```rust
 use furiosa_client::{FuriosaClient, SourceFormat, TargetFormat};
 
+let target_npu_spec: serde:json::Value = serde_yaml::from_str(include_str!("../configs/64dpes.yml")).unwrap();
+let compiler_config: Value = serde_json::from_str("{}").unwrap();
+
 let client = FuriosaClient::new().unwrap();
-let result = client.compile_from_file(
-      SourceFormat::Tflite,
-      TargetFormat::Enf,
-      "models/tflite/MNISTnet_uint8_quant.tflite",
-);
-let enf_binary: Box<[u8]> = result.unwrap();
+let binary = std::fs::read("models/tflite/MNISTnet_uint8_quant.tflite").expect("fail to read");
+let request = CompileRequest::new(target_npu_spec, binary).compile_config(compiler_config);
+let result: Box<[u8]> = client.compile(request).unwrap();
 ```
 
 Please see a full example at the [integration tests](https://github.com/furiosa-ai/furiosa-client/blob/master/tests/integration_test.rs).
