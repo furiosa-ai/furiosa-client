@@ -134,22 +134,18 @@ pub struct CompileRequest {
     compiler_config: Option<Value>,
     source_format: Option<SourceFormat>,
     target_format: TargetFormat,
-    filename: Option<String>,
+    filename: String,
     source: Vec<u8>,
 }
 
 impl CompileRequest {
-    pub fn new<S: AsRef<[u8]>>(
-        target_npu_spec: Value,
-        target_format: TargetFormat,
-        source: S,
-    ) -> CompileRequest {
+    pub fn new<S: AsRef<[u8]>>(target_npu_spec: Value, source: S) -> CompileRequest {
         CompileRequest {
             target_npu_spec,
             compiler_config: None,
             source_format: None,
-            target_format,
-            filename: None,
+            target_format: TargetFormat::Enf,
+            filename: String::from("noname"),
             source: source.as_ref().to_vec(),
         }
     }
@@ -159,13 +155,18 @@ impl CompileRequest {
         self
     }
 
+    pub fn target_format(mut self, target_format: TargetFormat) -> CompileRequest {
+        self.target_format = target_format;
+        self
+    }
+
     pub fn compile_config(mut self, compile_config: Value) -> CompileRequest {
         self.compiler_config = Some(compile_config);
         self
     }
 
     pub fn filename(mut self, filename: &str) -> CompileRequest {
-        self.filename = Some(filename.to_string());
+        self.filename = String::from(filename);
         self
     }
 }
@@ -222,8 +223,7 @@ impl FuriosaClient {
 
     pub fn compile(&self, request: CompileRequest) -> Result<Box<[u8]>, ClientError> {
         let mut model_image = Part::bytes(request.source.clone());
-        model_image =
-            model_image.file_name(request.filename.unwrap_or_else(|| "noname".to_string()));
+        model_image = model_image.file_name(request.filename.clone());
 
         model_image =
             model_image.mime_str(APPLICATION_OCTET_STREAM_MIME).expect("Invalid MIME type");
