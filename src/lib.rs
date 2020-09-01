@@ -1,5 +1,5 @@
 use std::io;
-use std::path::{PathBuf};
+use std::path::PathBuf;
 
 use log::info;
 use reqwest::blocking::multipart::{Form, Part};
@@ -139,8 +139,11 @@ pub struct CompileRequest {
 }
 
 impl CompileRequest {
-    pub fn new<S: AsRef<[u8]>>(target_npu_spec: Value, target_format: TargetFormat, source: S)
-            -> CompileRequest {
+    pub fn new<S: AsRef<[u8]>>(
+        target_npu_spec: Value,
+        target_format: TargetFormat,
+        source: S,
+    ) -> CompileRequest {
         CompileRequest {
             target_npu_spec,
             compiler_config: None,
@@ -148,7 +151,6 @@ impl CompileRequest {
             target_format,
             filename: None,
             source: source.as_ref().to_vec(),
-
         }
     }
 
@@ -225,19 +227,20 @@ impl FuriosaClient {
         })
     }
 
-    pub fn compile(
-        &self,
-        request: CompileRequest,
-    ) -> Result<Box<[u8]>, ClientError> {
+    pub fn compile(&self, request: CompileRequest) -> Result<Box<[u8]>, ClientError> {
         let mut model_image = Part::bytes(request.source.clone());
-        model_image = model_image.file_name(request.filename.unwrap_or("noname".to_string()));
+        model_image =
+            model_image.file_name(request.filename.unwrap_or_else(|| "noname".to_string()));
 
         model_image = model_image
             .mime_str(APPLICATION_OCTET_STREAM_MIME)
             .expect("Invalid MIME type");
 
         let mut form: Form = Form::new()
-            .text(TARGET_FORMAT_PART_NAME, request.target_format.as_str().to_string())
+            .text(
+                TARGET_FORMAT_PART_NAME,
+                request.target_format.as_str().to_string(),
+            )
             .text(
                 TARGET_NPU_SPEC_PART_NAME,
                 serde_json::to_string(&request.target_npu_spec).unwrap(),
@@ -249,7 +252,10 @@ impl FuriosaClient {
         };
 
         if let Some(compiler_config) = &request.compiler_config {
-            form = form.text(COMPILER_CONFIG_PART_NAME, serde_json::to_string(compiler_config).unwrap());
+            form = form.text(
+                COMPILER_CONFIG_PART_NAME,
+                serde_json::to_string(compiler_config).unwrap(),
+            );
         };
 
         let response = self

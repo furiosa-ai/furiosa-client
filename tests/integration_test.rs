@@ -1,4 +1,4 @@
-use furiosa_client::{FuriosaClient, TargetFormat, CompileRequest};
+use furiosa_client::{CompileRequest, FuriosaClient, TargetFormat};
 use serde_json::Value;
 
 #[test]
