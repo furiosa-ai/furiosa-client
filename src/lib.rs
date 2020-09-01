@@ -190,10 +190,7 @@ fn get_credential_from_file() -> Result<(), ClientError> {
         dotenv::from_path(path)?;
         Ok(())
     } else {
-        Err(ClientError::io_error(
-            io::ErrorKind::NotFound,
-            "credential file not found",
-        ))
+        Err(ClientError::io_error(io::ErrorKind::NotFound, "credential file not found"))
     }
 }
 
@@ -220,11 +217,7 @@ impl FuriosaClient {
             .build()
             .expect("fail to create HTTP Client");
 
-        Ok(FuriosaClient {
-            client,
-            access_key_id,
-            secret_access_key,
-        })
+        Ok(FuriosaClient { client, access_key_id, secret_access_key })
     }
 
     pub fn compile(&self, request: CompileRequest) -> Result<Box<[u8]>, ClientError> {
@@ -232,15 +225,11 @@ impl FuriosaClient {
         model_image =
             model_image.file_name(request.filename.unwrap_or_else(|| "noname".to_string()));
 
-        model_image = model_image
-            .mime_str(APPLICATION_OCTET_STREAM_MIME)
-            .expect("Invalid MIME type");
+        model_image =
+            model_image.mime_str(APPLICATION_OCTET_STREAM_MIME).expect("Invalid MIME type");
 
         let mut form: Form = Form::new()
-            .text(
-                TARGET_FORMAT_PART_NAME,
-                request.target_format.as_str().to_string(),
-            )
+            .text(TARGET_FORMAT_PART_NAME, request.target_format.as_str().to_string())
             .text(
                 TARGET_NPU_SPEC_PART_NAME,
                 serde_json::to_string(&request.target_npu_spec).unwrap(),
@@ -252,19 +241,14 @@ impl FuriosaClient {
         };
 
         if let Some(compiler_config) = &request.compiler_config {
-            form = form.text(
-                COMPILER_CONFIG_PART_NAME,
-                serde_json::to_string(compiler_config).unwrap(),
-            );
+            form = form
+                .text(COMPILER_CONFIG_PART_NAME, serde_json::to_string(compiler_config).unwrap());
         };
 
         let response = self
             .client
             .post(&api_v1_path("compiler"))
-            .header(
-                REQUEST_ID_HTTP_HEADER,
-                Uuid::new_v4().to_hyphenated().to_string(),
-            )
+            .header(REQUEST_ID_HTTP_HEADER, Uuid::new_v4().to_hyphenated().to_string())
             .header(ACCESS_KEY_ID_HTTP_HEADER, &self.access_key_id)
             .header(SECRET_ACCESS_KEY_HTTP_HEADER, &self.secret_access_key)
             .multipart(form)
@@ -275,10 +259,9 @@ impl FuriosaClient {
                 if res.status().is_success() {
                     match res.bytes() {
                         Ok(bytes) => Ok(bytes.to_vec().into_boxed_slice()),
-                        Err(e) => Err(ApiError(format!(
-                            "fail to fetch the compiled binary: {}",
-                            e
-                        ))),
+                        Err(e) => {
+                            Err(ApiError(format!("fail to fetch the compiled binary: {}", e)))
+                        }
                     }
                 } else {
                     let response: ApiResponse = match res.json() {
