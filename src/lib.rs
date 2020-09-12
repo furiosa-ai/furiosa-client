@@ -34,8 +34,7 @@ static REQUEST_ID_HTTP_HEADER: &str = "X-Request-Id";
 
 static TARGET_NPU_SPEC_PART_NAME: &str = "target_npu_spec";
 static COMPILER_CONFIG_PART_NAME: &str = "compiler_config";
-static SOURCE_FORMAT_PART_NAME: &str = "source_format";
-static TARGET_FORMAT_PART_NAME: &str = "target_format";
+static TARGET_IR_PART_NAME: &str = "target_ir";
 static SOURCE_PART_NAME: &str = "source";
 
 fn api_v1_path(path: &str) -> String {
@@ -92,33 +91,7 @@ struct ApiResponse {
 }
 
 #[derive(Copy, Clone)]
-pub enum SourceFormat {
-    Tflite,
-    Onnx,
-    Dfg,
-    Ldfg,
-    Cdfg,
-    Gir,
-    Lir,
-}
-
-impl SourceFormat {
-    fn as_str(&self) -> &str {
-        use SourceFormat::*;
-        match self {
-            Tflite => "tflite",
-            Onnx => "onnx",
-            Dfg => "dfg",
-            Ldfg => "ldfg",
-            Cdfg => "cdfg",
-            Gir => "gir",
-            Lir => "lir",
-        }
-    }
-}
-
-#[derive(Copy, Clone)]
-pub enum TargetFormat {
+pub enum TargetIr {
     Dfg,
     Ldfg,
     Cdfg,
@@ -127,9 +100,9 @@ pub enum TargetFormat {
     Enf,
 }
 
-impl TargetFormat {
+impl TargetIr {
     fn as_str(&self) -> &str {
-        use TargetFormat::*;
+        use TargetIr::*;
         match self {
             Dfg => "dfg",
             Ldfg => "ldfg",
@@ -144,8 +117,7 @@ impl TargetFormat {
 pub struct CompileRequest {
     target_npu_spec: Value,
     compiler_config: Option<Value>,
-    source_format: Option<SourceFormat>,
-    target_format: TargetFormat,
+    target_ir: TargetIr,
     filename: String,
     source: Vec<u8>,
 }
@@ -155,20 +127,14 @@ impl CompileRequest {
         CompileRequest {
             target_npu_spec,
             compiler_config: None,
-            source_format: None,
-            target_format: TargetFormat::Enf,
+            target_ir: TargetIr::Enf,
             filename: String::from("noname"),
             source: source.as_ref().to_vec(),
         }
     }
 
-    pub fn source_format(mut self, source_format: SourceFormat) -> CompileRequest {
-        self.source_format = Some(source_format);
-        self
-    }
-
-    pub fn target_format(mut self, target_format: TargetFormat) -> CompileRequest {
-        self.target_format = target_format;
+    pub fn target_ir(mut self, target_format: TargetIr) -> CompileRequest {
+        self.target_ir = target_format;
         self
     }
 
@@ -241,16 +207,12 @@ impl FuriosaClient {
             model_image.mime_str(APPLICATION_OCTET_STREAM_MIME).expect("Invalid MIME type");
 
         let mut form: Form = Form::new()
-            .text(TARGET_FORMAT_PART_NAME, request.target_format.as_str().to_string())
+            .text(TARGET_IR_PART_NAME, request.target_ir.as_str().to_string())
             .text(
                 TARGET_NPU_SPEC_PART_NAME,
                 serde_json::to_string(&request.target_npu_spec).unwrap(),
             )
             .part(SOURCE_PART_NAME, model_image);
-
-        if let Some(src_format) = &request.source_format {
-            form = form.text(SOURCE_FORMAT_PART_NAME, src_format.as_str().to_string());
-        };
 
         if let Some(compiler_config) = &request.compiler_config {
             form = form
