@@ -1,24 +1,18 @@
 [package]
 name = "furiosa-client"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Furiosa.AI"]
 edition = "2018"
 
 [lib]
 path = "src/lib.rs"
 
-[features]
-default = ["sandbox_api"]
-local_api = []
-sandbox_api = []
-production_api = []
-
 [dependencies]
 dirs = "3"
 dotenv = "0.15"
 log = "0.4"
 thiserror = "1"
-reqwest = { version = "0.10.7", features = ["blocking", "json"] }
+reqwest = { version = "0.10.7", features = ["json"] }
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.8"
 serde_json = "1"

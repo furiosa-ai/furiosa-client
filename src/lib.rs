@@ -13,8 +13,8 @@
 use std::io;
 use std::path::PathBuf;
 
-use log::info;
-use reqwest::blocking::multipart::{Form, Part};
+use log::{info, warn};
+use reqwest::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
@@ -22,12 +22,14 @@ use uuid::Uuid;
 use crate::ClientError::ApiError;
 use serde_json::Value;
 
+pub static FURIOSA_API_ENDPOINT_ENV: &str = "FURIOSA_API_ENDPOINT";
 static ACCESS_KEY_ID_ENV: &str = "FURIOSA_ACCESS_KEY_ID";
 static SECRET_ACCESS_KEY_ENV: &str = "FURIOSA_SECRET_ACCESS_KEY";
+static DEFAULT_FURIOSA_API_ENDPOINT: &str = "https://api.furiosa.ai/api/v1";
 
 static APPLICATION_OCTET_STREAM_MIME: &str = "application/octet-stream";
 
-static USER_AGENT: &str = "FuriosaAI Rust Client";
+static USER_AGENT: &str = "FuriosaAI Rust Client (version: 0.1.1)";
 static ACCESS_KEY_ID_HTTP_HEADER: &str = "X-FuriosaAI-Access-Key-ID";
 static SECRET_ACCESS_KEY_HTTP_HEADER: &str = "X-FuriosaAI-Secret-Access-KEY";
 static REQUEST_ID_HTTP_HEADER: &str = "X-Request-Id";
@@ -36,14 +38,6 @@ static TARGET_NPU_SPEC_PART_NAME: &str = "target_npu_spec";
 static COMPILER_CONFIG_PART_NAME: &str = "compiler_config";
 static TARGET_IR_PART_NAME: &str = "target_ir";
 static SOURCE_PART_NAME: &str = "source";
-
-fn api_v1_path(path: &str) -> String {
-    if cfg!(feature = "local_api") {
-        format!("http://localhost:8080/api/v1/{}", path)
-    } else {
-        format!("http://internal-furiosa-api-backend-dev-887583302.ap-northeast-2.elb.amazonaws.com:8080/api/v1/{}", path)
-    }
-}
 
 #[derive(Error, Debug)]
 pub enum ClientError {
@@ -150,7 +144,8 @@ impl CompileRequest {
 }
 
 pub struct FuriosaClient {
-    client: reqwest::blocking::Client,
+    client: reqwest::Client,
+    endpoint: String,
     access_key_id: String,
     secret_access_key: String,
 }
@@ -173,10 +168,32 @@ fn get_credential_from_file() -> Result<(), ClientError> {
     }
 }
 
+pub fn get_endpoint_from_env() -> String {
+    match std::env::var(FURIOSA_API_ENDPOINT_ENV) {
+        Ok(mut val) => {
+            // remove the trailing slash
+            loop {
+                if val.ends_with('/') {
+                    val.remove(val.len() - 1);
+                } else {
+                    break;
+                }
+            }
+            val
+        }
+        Err(e) => {
+            warn!(
+                "the environment variable '{}' is invalid, \
+                and the default endpoint will be used",
+                e
+            );
+            String::from(DEFAULT_FURIOSA_API_ENDPOINT)
+        }
+    }
+}
+
 impl FuriosaClient {
     pub fn new() -> Result<FuriosaClient, ClientError> {
-        info!("Connecting API Endpoint: {}", api_v1_path(""));
-
         // Try to read $HOME/.furiosa/credential and set credentials to environment variables
         match get_credential_from_file() {
             Ok(_) => {}
@@ -186,20 +203,31 @@ impl FuriosaClient {
             Err(e) => return Err(e),
         };
 
-        // Try to get both KEYs and exist if KEYs are not set
+        // Try to get both API KEYs and exist if KEYs are not set
         let access_key_id = std::env::var(ACCESS_KEY_ID_ENV).map_err(|_| ClientError::NoApiKey)?;
         let secret_access_key =
             std::env::var(SECRET_ACCESS_KEY_ENV).map_err(|_| ClientError::NoApiKey)?;
 
-        let client = reqwest::blocking::Client::builder()
+        let endpoint = get_endpoint_from_env();
+        let client = reqwest::Client::builder()
             .user_agent(USER_AGENT)
             .build()
             .expect("fail to create HTTP Client");
 
-        Ok(FuriosaClient { client, access_key_id, secret_access_key })
+        info!("Connecting API Endpoint: {}", &endpoint);
+        Ok(FuriosaClient { client, endpoint, access_key_id, secret_access_key })
     }
 
-    pub fn compile(&self, request: CompileRequest) -> Result<Box<[u8]>, ClientError> {
+    #[inline]
+    fn api_v1_path(&self, path: &str) -> String {
+        format!("{}/{}", &self.endpoint, path)
+    }
+
+    pub fn endpoint(&self) -> &str {
+        &self.endpoint
+    }
+
+    pub async fn compile(&self, request: CompileRequest) -> Result<Box<[u8]>, ClientError> {
         let mut model_image = Part::bytes(request.source.clone());
         model_image = model_image.file_name(request.filename.clone());
 
@@ -221,24 +249,25 @@ impl FuriosaClient {
 
         let response = self
             .client
-            .post(&api_v1_path("compiler"))
+            .post(&self.api_v1_path("compiler"))
             .header(REQUEST_ID_HTTP_HEADER, Uuid::new_v4().to_hyphenated().to_string())
             .header(ACCESS_KEY_ID_HTTP_HEADER, &self.access_key_id)
             .header(SECRET_ACCESS_KEY_HTTP_HEADER, &self.secret_access_key)
             .multipart(form)
-            .send();
+            .send()
+            .await;
 
         match response {
             Ok(res) => {
                 if res.status().is_success() {
-                    match res.bytes() {
+                    match res.bytes().await {
                         Ok(bytes) => Ok(bytes.to_vec().into_boxed_slice()),
                         Err(e) => {
                             Err(ApiError(format!("fail to fetch the compiled binary: {}", e)))
                         }
                     }
                 } else {
-                    let response: ApiResponse = match res.json() {
+                    let response: ApiResponse = match res.json().await {
                         Ok(api_response) => api_response,
                         Err(e) => return Err(ApiError(format!("fail to get API response: {}", e))),
                     };
