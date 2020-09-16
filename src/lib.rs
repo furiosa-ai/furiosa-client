@@ -150,22 +150,33 @@ pub struct FuriosaClient {
     secret_access_key: String,
 }
 
-fn credential_file_path() -> Option<PathBuf> {
+fn config_file_path(file: &str) -> Option<PathBuf> {
     dirs::home_dir()
         .map(|mut home| {
-            home.push(".furiosa/credential");
+            home.push(format!(".furiosa/{}", file));
             home
         })
         .filter(|p| p.exists())
 }
 
-fn get_credential_from_file() -> Result<(), ClientError> {
-    if let Some(path) = credential_file_path() {
+fn load_config_file_(file: &str) -> Result<(), ClientError> {
+    if let Some(path) = config_file_path(file) {
         dotenv::from_path(path)?;
         Ok(())
     } else {
-        Err(ClientError::io_error(io::ErrorKind::NotFound, "credential file not found"))
+        Err(ClientError::io_error(io::ErrorKind::NotFound, &format!("{} file not found", file)))
     }
+}
+
+fn load_config_file(file: &str) -> Result<(), ClientError> {
+    match load_config_file_(file) {
+        Ok(_) => {}
+        Err(ClientError::Io(_)) => {
+            // ignore the file not found error because it's optional
+        }
+        Err(e) => return Err(e),
+    };
+    Ok(())
 }
 
 pub fn get_endpoint_from_env() -> String {
@@ -194,14 +205,10 @@ pub fn get_endpoint_from_env() -> String {
 
 impl FuriosaClient {
     pub fn new() -> Result<FuriosaClient, ClientError> {
+        // Try to read $HOME/.furiosa/config including extra configurations
+        load_config_file("config")?;
         // Try to read $HOME/.furiosa/credential and set credentials to environment variables
-        match get_credential_from_file() {
-            Ok(_) => {}
-            Err(ClientError::Io(_)) => {
-                // ignore the file not found error because it's optional
-            }
-            Err(e) => return Err(e),
-        };
+        load_config_file("credential")?;
 
         // Try to get both API KEYs and exist if KEYs are not set
         let access_key_id = std::env::var(ACCESS_KEY_ID_ENV).map_err(|_| ClientError::NoApiKey)?;
