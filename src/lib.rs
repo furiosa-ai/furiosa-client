@@ -10,6 +10,9 @@
 //! FURIOSA_SECRET_ACCESS_KEY=YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY
 //! ```
 
+#[cfg(feature = "blocking")]
+pub mod blocking;
+
 use std::io;
 use std::path::PathBuf;
 

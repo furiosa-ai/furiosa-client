@@ -7,6 +7,10 @@ edition = "2018"
 [lib]
 path = "src/lib.rs"
 
+[features]
+default = []
+blocking = []
+
 [dependencies]
 dirs = "3"
 dotenv = "0.15"
