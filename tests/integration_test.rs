@@ -1,4 +1,6 @@
-use furiosa_client::{get_endpoint_from_env, CompileRequest, FuriosaClient, TargetIr, FURIOSA_API_ENDPOINT_ENV, blocking};
+use furiosa_client::{
+    get_endpoint_from_env, CompileRequest, FuriosaClient, TargetIr, FURIOSA_API_ENDPOINT_ENV,
+};
 use serde_json::Value;
 
 #[test]
@@ -14,10 +16,12 @@ fn test_get_endpoint_from_env() {
     std::env::set_var(FURIOSA_API_ENDPOINT_ENV, origin_endpoint);
 }
 
-#[cfg(feature="blocking")]
+#[cfg(feature = "blocking")]
 #[test]
 #[ignore]
 fn test_blocking_compile_with_default() {
+    use furiosa_client::blocking;
+
     env_logger::init();
 
     let target_npu_spec: Value =
@@ -42,8 +46,8 @@ async fn test_compile_with_default() {
     let compiler_config: Value = serde_json::from_str("{}").unwrap();
 
     let client = FuriosaClient::new().unwrap();
-    let binary = tokio::fs::read("models/tflite/MNISTnet_uint8_quant.tflite").await
-        .expect("fail to read");
+    let binary =
+        tokio::fs::read("models/tflite/MNISTnet_uint8_quant.tflite").await.expect("fail to read");
     let request = CompileRequest::new(target_npu_spec, binary).compile_config(compiler_config);
 
     let result = client.compile(request).await;
@@ -60,8 +64,8 @@ async fn test_compile_with_target_ir() {
     let compiler_config: Value = serde_json::from_str("{}").unwrap();
 
     let client = FuriosaClient::new().unwrap();
-    let binary = tokio::fs::read("models/tflite/MNISTnet_uint8_quant.tflite").await
-        .expect("fail to read");
+    let binary =
+        tokio::fs::read("models/tflite/MNISTnet_uint8_quant.tflite").await.expect("fail to read");
     let request = CompileRequest::new(target_npu_spec, binary)
         .compile_config(compiler_config)
         .target_ir(TargetIr::Lir);
