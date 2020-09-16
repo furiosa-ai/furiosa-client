@@ -1,4 +1,4 @@
-use crate::{ClientError, CompileRequest};
+pub use crate::{ClientError, CompileRequest};
 
 pub struct FuriosaClient {
     _runtime: tokio::runtime::Runtime,

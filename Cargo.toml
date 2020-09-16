@@ -1,6 +1,6 @@
 [package]
 name = "furiosa-client"
-version = "0.2.0"
+version = "0.3.1"
 authors = ["Furiosa.AI"]
 edition = "2018"
 
@@ -15,6 +15,7 @@ blocking = []
 dirs = "3"
 dotenv = "0.15"
 log = "0.4"
+lazy_static = "1.4.0"
 thiserror = "1"
 reqwest = { version = "0.10.7", features = ["json"] }
 serde = { version = "1", features = ["derive"] }

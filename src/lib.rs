@@ -10,20 +10,20 @@
 //! FURIOSA_SECRET_ACCESS_KEY=YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY
 //! ```
 
-#[cfg(feature = "blocking")]
-pub mod blocking;
-
 use std::io;
 use std::path::PathBuf;
 
+use lazy_static::lazy_static;
 use log::{info, warn};
 use reqwest::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
+use serde_json::Value;
 use uuid::Uuid;
 
 use crate::ClientError::ApiError;
-use serde_json::Value;
+
+#[cfg(feature = "blocking")]
+pub mod blocking;
 
 pub static FURIOSA_API_ENDPOINT_ENV: &str = "FURIOSA_API_ENDPOINT";
 static ACCESS_KEY_ID_ENV: &str = "FURIOSA_ACCESS_KEY_ID";
@@ -31,18 +31,24 @@ static SECRET_ACCESS_KEY_ENV: &str = "FURIOSA_SECRET_ACCESS_KEY";
 static DEFAULT_FURIOSA_API_ENDPOINT: &str = "https://api.furiosa.ai/api/v1";
 
 static APPLICATION_OCTET_STREAM_MIME: &str = "application/octet-stream";
-
-static USER_AGENT: &str = "FuriosaAI Rust Client (version: 0.1.1)";
 static ACCESS_KEY_ID_HTTP_HEADER: &str = "X-FuriosaAI-Access-Key-ID";
 static SECRET_ACCESS_KEY_HTTP_HEADER: &str = "X-FuriosaAI-Secret-Access-KEY";
 static REQUEST_ID_HTTP_HEADER: &str = "X-Request-Id";
+lazy_static! {
+    pub static ref FURIOSA_CLIENT_USER_AGENT: String = {
+        let mut user_agent = String::from("FuriosaAI Rust Client (ver.");
+        user_agent.push_str(env!("CARGO_PKG_VERSION"));
+        user_agent.push(')');
+        user_agent
+    };
+}
 
 static TARGET_NPU_SPEC_PART_NAME: &str = "target_npu_spec";
 static COMPILER_CONFIG_PART_NAME: &str = "compiler_config";
 static TARGET_IR_PART_NAME: &str = "target_ir";
 static SOURCE_PART_NAME: &str = "source";
 
-#[derive(Error, Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum ClientError {
     #[error("IO Error: {0}")]
     Io(io::Error),
@@ -220,7 +226,7 @@ impl FuriosaClient {
 
         let endpoint = get_endpoint_from_env();
         let client = reqwest::Client::builder()
-            .user_agent(USER_AGENT)
+            .user_agent(FURIOSA_CLIENT_USER_AGENT.as_str())
             .build()
             .expect("fail to create HTTP Client");
 
