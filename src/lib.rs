@@ -126,13 +126,13 @@ pub struct CompileRequest {
 }
 
 impl CompileRequest {
-    pub fn new<S: AsRef<[u8]>>(target_npu_spec: Value, source: S) -> CompileRequest {
+    pub fn new(target_npu_spec: Value, source: Vec<u8>) -> CompileRequest {
         CompileRequest {
             target_npu_spec,
             compiler_config: None,
             target_ir: TargetIr::Enf,
             filename: String::from("noname"),
-            source: source.as_ref().to_vec(),
+            source,
         }
     }
 
