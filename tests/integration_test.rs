@@ -48,7 +48,7 @@ async fn test_compile_with_default() {
     let client = FuriosaClient::new().unwrap();
     let binary =
         tokio::fs::read("models/tflite/MNISTnet_uint8_quant.tflite").await.expect("fail to read");
-    let request = CompileRequest::new(target_npu_spec, binary).compile_config(compiler_config);
+    let request = CompileRequest::new(target_npu_spec, &binary).compile_config(compiler_config);
 
     let result = client.compile(request).await;
     assert!(result.is_ok(), format!("{:?}", result.err()));

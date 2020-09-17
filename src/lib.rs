@@ -21,6 +21,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use crate::ClientError::ApiError;
+use std::borrow::Cow;
 
 #[cfg(feature = "blocking")]
 pub mod blocking;
@@ -126,13 +127,16 @@ pub struct CompileRequest {
 }
 
 impl CompileRequest {
-    pub fn new(target_npu_spec: Value, source: Vec<u8>) -> CompileRequest {
+    pub fn new<'a, S: Into<Cow<'a, [u8]>>>(target_npu_spec: Value, source: S) -> CompileRequest {
         CompileRequest {
             target_npu_spec,
             compiler_config: None,
             target_ir: TargetIr::Enf,
             filename: String::from("noname"),
-            source,
+            source: match source.into() {
+                Cow::Borrowed(value) => Vec::from(value),
+                Cow::Owned(value) => value,
+            },
         }
     }
 
@@ -244,8 +248,8 @@ impl FuriosaClient {
     }
 
     pub async fn compile(&self, request: CompileRequest) -> Result<Box<[u8]>, ClientError> {
-        let mut model_image = Part::bytes(request.source.clone());
-        model_image = model_image.file_name(request.filename.clone());
+        let mut model_image = Part::bytes(request.source);
+        model_image = model_image.file_name(request.filename);
 
         model_image =
             model_image.mime_str(APPLICATION_OCTET_STREAM_MIME).expect("Invalid MIME type");
