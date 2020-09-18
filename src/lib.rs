@@ -14,7 +14,7 @@ use std::io;
 use std::path::PathBuf;
 
 use lazy_static::lazy_static;
-use log::{info, warn};
+use log::{error, info};
 use reqwest::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -22,6 +22,7 @@ use uuid::Uuid;
 
 use crate::ClientError::ApiError;
 use std::borrow::Cow;
+use std::env::VarError;
 
 #[cfg(feature = "blocking")]
 pub mod blocking;
@@ -192,7 +193,7 @@ fn load_config_file(file: &str) -> Result<(), ClientError> {
     Ok(())
 }
 
-pub fn get_endpoint_from_env() -> String {
+pub fn get_endpoint_from_env() -> Result<String, ClientError> {
     match std::env::var(FURIOSA_API_ENDPOINT_ENV) {
         Ok(mut val) => {
             // remove the trailing slash
@@ -203,16 +204,10 @@ pub fn get_endpoint_from_env() -> String {
                     break;
                 }
             }
-            val
+            Ok(val)
         }
-        Err(e) => {
-            warn!(
-                "the environment variable '{}' is invalid, \
-                and the default endpoint will be used",
-                e
-            );
-            String::from(DEFAULT_FURIOSA_API_ENDPOINT)
-        }
+        Err(VarError::NotPresent) => Ok(String::from(DEFAULT_FURIOSA_API_ENDPOINT)),
+        Err(e) => Err(ClientError::ConfigEnvVar(e)),
     }
 }
 
@@ -228,7 +223,7 @@ impl FuriosaClient {
         let secret_access_key =
             std::env::var(SECRET_ACCESS_KEY_ENV).map_err(|_| ClientError::NoApiKey)?;
 
-        let endpoint = get_endpoint_from_env();
+        let endpoint = get_endpoint_from_env()?;
         let client = reqwest::Client::builder()
             .user_agent(FURIOSA_CLIENT_USER_AGENT.as_str())
             .build()

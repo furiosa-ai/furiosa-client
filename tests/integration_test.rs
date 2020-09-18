@@ -1,19 +1,21 @@
 use furiosa_client::{
-    get_endpoint_from_env, CompileRequest, FuriosaClient, TargetIr, FURIOSA_API_ENDPOINT_ENV,
+    get_endpoint_from_env, ClientError, CompileRequest, FuriosaClient, TargetIr,
+    FURIOSA_API_ENDPOINT_ENV,
 };
 use serde_json::Value;
 
 #[test]
-fn test_get_endpoint_from_env() {
-    let origin_endpoint = get_endpoint_from_env();
+fn test_get_endpoint_from_env() -> Result<(), ClientError> {
+    let origin_endpoint = get_endpoint_from_env()?;
 
     std::env::set_var(FURIOSA_API_ENDPOINT_ENV, "https://test.api/api/v1/////");
-    assert_eq!("https://test.api/api/v1", &get_endpoint_from_env());
+    assert_eq!("https://test.api/api/v1", &get_endpoint_from_env()?);
 
     std::env::set_var(FURIOSA_API_ENDPOINT_ENV, "https://test.api/api/v1");
-    assert_eq!("https://test.api/api/v1", &get_endpoint_from_env());
+    assert_eq!("https://test.api/api/v1", &get_endpoint_from_env()?);
 
     std::env::set_var(FURIOSA_API_ENDPOINT_ENV, origin_endpoint);
+    Ok(())
 }
 
 #[cfg(feature = "blocking")]
