@@ -17,7 +17,7 @@ dotenv = "0.15.0"
 log = "0.4.11"
 lazy_static = "1.4.0"
 thiserror = "1.0.20"
-reqwest = { version = "0.10.7", features = ["json"] }
+reqwest = { version = "0.10.8", features = ["json"] }
 serde = { version = "1.0.116", features = ["derive"] }
 serde_yaml = "0.8.13"
 serde_json = "1.0.57"
