@@ -1,3 +1,4 @@
+pub use crate::dss::{CalibrateRequest, QuantizeRequest};
 pub use crate::{ClientError, CompileRequest};
 
 pub struct FuriosaClient {
@@ -16,5 +17,13 @@ impl FuriosaClient {
 
     pub fn compile(&self, request: CompileRequest) -> Result<Box<[u8]>, ClientError> {
         self.handle.block_on(async { self.inner.compile(request).await })
+    }
+
+    pub fn calibrate(&self, request: CalibrateRequest) -> Result<Box<[u8]>, ClientError> {
+        self.handle.block_on(async { self.inner.calibrate(request).await })
+    }
+
+    pub fn quantize(&self, request: QuantizeRequest) -> Result<Box<[u8]>, ClientError> {
+        self.handle.block_on(async { self.inner.quantize(request).await })
     }
 }
