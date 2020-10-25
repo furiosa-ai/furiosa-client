@@ -235,7 +235,10 @@ impl FuriosaClient {
         }
     }
 
-    pub async fn calibrate(&self, request: CalibrateRequest) -> Result<Box<[u8]>, ClientError> {
+    pub async fn build_calibration_model(
+        &self,
+        request: CalibrateRequest,
+    ) -> Result<Box<[u8]>, ClientError> {
         let mut model_image = Part::bytes(request.source);
         model_image = model_image.file_name(request.filename);
 
@@ -251,7 +254,7 @@ impl FuriosaClient {
 
         let response = self
             .client
-            .post(&self.api_v1_path("dss/calibrate"))
+            .post(&self.api_v1_path("dss/build-calibration-model"))
             .header(REQUEST_ID_HTTP_HEADER, Uuid::new_v4().to_hyphenated().to_string())
             .header(ACCESS_KEY_ID_HTTP_HEADER, &self.access_key_id)
             .header(SECRET_ACCESS_KEY_HTTP_HEADER, &self.secret_access_key)
@@ -265,7 +268,7 @@ impl FuriosaClient {
                     match res.bytes().await {
                         Ok(bytes) => Ok(bytes.to_vec().into_boxed_slice()),
                         Err(e) => {
-                            Err(ApiError(format!("fail to fetch the calibrated onnx: {}", e)))
+                            Err(ApiError(format!("fail to fetch the calibration onnx: {}", e)))
                         }
                     }
                 } else {
