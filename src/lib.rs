@@ -251,7 +251,7 @@ impl FuriosaClient {
 
         let response = self
             .client
-            .post(&self.api_v1_path("dss/calibrate"))
+            .post(&self.api_v1_path("dss/build-calibration-model"))
             .header(REQUEST_ID_HTTP_HEADER, Uuid::new_v4().to_hyphenated().to_string())
             .header(ACCESS_KEY_ID_HTTP_HEADER, &self.access_key_id)
             .header(SECRET_ACCESS_KEY_HTTP_HEADER, &self.secret_access_key)
