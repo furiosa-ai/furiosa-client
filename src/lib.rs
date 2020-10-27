@@ -10,6 +10,7 @@
 //! FURIOSA_SECRET_ACCESS_KEY=YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY
 //! ```
 
+use std::env::VarError;
 use std::io;
 use std::path::PathBuf;
 
@@ -17,15 +18,16 @@ use lazy_static::lazy_static;
 use log::{error, info};
 use reqwest::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use uuid::Uuid;
 
+pub use crate::compile::{CompileRequest, TargetIr};
+pub use crate::dss::{CalibrateRequest, QuantizeRequest};
 use crate::ClientError::ApiError;
-use std::borrow::Cow;
-use std::env::VarError;
 
 #[cfg(feature = "blocking")]
 pub mod blocking;
+mod compile;
+mod dss;
 
 pub static FURIOSA_API_ENDPOINT_ENV: &str = "FURIOSA_API_ENDPOINT";
 static ACCESS_KEY_ID_ENV: &str = "FURIOSA_ACCESS_KEY_ID";
@@ -49,6 +51,8 @@ static TARGET_NPU_SPEC_PART_NAME: &str = "target_npu_spec";
 static COMPILER_CONFIG_PART_NAME: &str = "compiler_config";
 static TARGET_IR_PART_NAME: &str = "target_ir";
 static SOURCE_PART_NAME: &str = "source";
+static DSS_INPUT_TENSORS_PART_NAME: &str = "input_tensors";
+static DSS_DYNAMIC_RANGES_PART_NAME: &str = "dynamic_ranges";
 
 #[derive(thiserror::Error, Debug)]
 pub enum ClientError {
@@ -93,68 +97,6 @@ struct ApiResponse {
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trace_id: Option<String>,
-}
-
-#[derive(Copy, Clone)]
-pub enum TargetIr {
-    Dfg,
-    Ldfg,
-    Cdfg,
-    Gir,
-    Lir,
-    Enf,
-}
-
-impl TargetIr {
-    fn as_str(&self) -> &str {
-        use TargetIr::*;
-        match self {
-            Dfg => "dfg",
-            Ldfg => "ldfg",
-            Cdfg => "cdfg",
-            Gir => "gir",
-            Lir => "lir",
-            Enf => "enf",
-        }
-    }
-}
-
-pub struct CompileRequest {
-    target_npu_spec: Value,
-    compiler_config: Option<Value>,
-    target_ir: TargetIr,
-    filename: String,
-    source: Vec<u8>,
-}
-
-impl CompileRequest {
-    pub fn new<'a, S: Into<Cow<'a, [u8]>>>(target_npu_spec: Value, source: S) -> CompileRequest {
-        CompileRequest {
-            target_npu_spec,
-            compiler_config: None,
-            target_ir: TargetIr::Enf,
-            filename: String::from("noname"),
-            source: match source.into() {
-                Cow::Borrowed(value) => Vec::from(value),
-                Cow::Owned(value) => value,
-            },
-        }
-    }
-
-    pub fn target_ir(mut self, target_format: TargetIr) -> CompileRequest {
-        self.target_ir = target_format;
-        self
-    }
-
-    pub fn compile_config(mut self, compile_config: Value) -> CompileRequest {
-        self.compiler_config = Some(compile_config);
-        self
-    }
-
-    pub fn filename(mut self, filename: &str) -> CompileRequest {
-        self.filename = String::from(filename);
-        self
-    }
 }
 
 pub struct FuriosaClient {
@@ -280,6 +222,101 @@ impl FuriosaClient {
                         Err(e) => {
                             Err(ApiError(format!("fail to fetch the compiled binary: {}", e)))
                         }
+                    }
+                } else {
+                    let response: ApiResponse = match res.json().await {
+                        Ok(api_response) => api_response,
+                        Err(e) => return Err(ApiError(format!("fail to get API response: {}", e))),
+                    };
+                    Err(ApiError(format!("fail to compile: {}", &response.message)))
+                }
+            }
+            Err(e) => Err(ApiError(format!("{}", e))),
+        }
+    }
+
+    pub async fn build_calibration_model(
+        &self,
+        request: CalibrateRequest,
+    ) -> Result<Box<[u8]>, ClientError> {
+        let mut model_image = Part::bytes(request.source);
+        model_image = model_image.file_name(request.filename);
+
+        model_image =
+            model_image.mime_str(APPLICATION_OCTET_STREAM_MIME).expect("Invalid MIME type");
+
+        let input_tensors = serde_json::to_string(&request.input_tensors).map_err(|_| {
+            ClientError::ApiError("Failed to serialize 'input_tenosrs'.".to_string())
+        })?;
+        let form: Form = Form::new()
+            .text(DSS_INPUT_TENSORS_PART_NAME, input_tensors)
+            .part(SOURCE_PART_NAME, model_image);
+
+        let response = self
+            .client
+            .post(&self.api_v1_path("dss/build-calibration-model"))
+            .header(REQUEST_ID_HTTP_HEADER, Uuid::new_v4().to_hyphenated().to_string())
+            .header(ACCESS_KEY_ID_HTTP_HEADER, &self.access_key_id)
+            .header(SECRET_ACCESS_KEY_HTTP_HEADER, &self.secret_access_key)
+            .multipart(form)
+            .send()
+            .await;
+
+        match response {
+            Ok(res) => {
+                if res.status().is_success() {
+                    match res.bytes().await {
+                        Ok(bytes) => Ok(bytes.to_vec().into_boxed_slice()),
+                        Err(e) => {
+                            Err(ApiError(format!("fail to fetch the calibration onnx: {}", e)))
+                        }
+                    }
+                } else {
+                    let response: ApiResponse = match res.json().await {
+                        Ok(api_response) => api_response,
+                        Err(e) => return Err(ApiError(format!("fail to get API response: {}", e))),
+                    };
+                    Err(ApiError(format!("fail to compile: {}", &response.message)))
+                }
+            }
+            Err(e) => Err(ApiError(format!("{}", e))),
+        }
+    }
+
+    pub async fn quantize(&self, request: QuantizeRequest) -> Result<Box<[u8]>, ClientError> {
+        let mut model_image = Part::bytes(request.source);
+        model_image = model_image.file_name(request.filename);
+
+        model_image =
+            model_image.mime_str(APPLICATION_OCTET_STREAM_MIME).expect("Invalid MIME type");
+
+        let input_tensors = serde_json::to_string(&request.input_tensors).map_err(|_| {
+            ClientError::ApiError("Failed to serialize 'input_tensors'.".to_string())
+        })?;
+        let dynamic_ranges = serde_json::to_string(&request.dynamic_ranges).map_err(|_| {
+            ClientError::ApiError("Failed to serialize 'dynamic_ranges'.".to_string())
+        })?;
+        let form: Form = Form::new()
+            .text(DSS_INPUT_TENSORS_PART_NAME, input_tensors)
+            .text(DSS_DYNAMIC_RANGES_PART_NAME, dynamic_ranges)
+            .part(SOURCE_PART_NAME, model_image);
+
+        let response = self
+            .client
+            .post(&self.api_v1_path("dss/quantize"))
+            .header(REQUEST_ID_HTTP_HEADER, Uuid::new_v4().to_hyphenated().to_string())
+            .header(ACCESS_KEY_ID_HTTP_HEADER, &self.access_key_id)
+            .header(SECRET_ACCESS_KEY_HTTP_HEADER, &self.secret_access_key)
+            .multipart(form)
+            .send()
+            .await;
+
+        match response {
+            Ok(res) => {
+                if res.status().is_success() {
+                    match res.bytes().await {
+                        Ok(bytes) => Ok(bytes.to_vec().into_boxed_slice()),
+                        Err(e) => Err(ApiError(format!("fail to fetch the quantized onnx: {}", e))),
                     }
                 } else {
                     let response: ApiResponse = match res.json().await {
