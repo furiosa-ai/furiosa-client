@@ -16,17 +16,17 @@ impl FuriosaClient {
     }
 
     pub fn compile(&self, request: CompileRequest) -> Result<Box<[u8]>, ClientError> {
-        self.handle.block_on(async { self.inner.compile(request).await })
+        self.handle.block_on(self.inner.compile(request))
     }
 
     pub fn build_calibration_model(
         &self,
         request: CalibrateRequest,
     ) -> Result<Box<[u8]>, ClientError> {
-        self.handle.block_on(async { self.inner.build_calibration_model(request).await })
+        self.handle.block_on(self.inner.build_calibration_model(request))
     }
 
     pub fn quantize(&self, request: QuantizeRequest) -> Result<Box<[u8]>, ClientError> {
-        self.handle.block_on(async { self.inner.quantize(request).await })
+        self.handle.block_on(self.inner.quantize(request))
     }
 }
