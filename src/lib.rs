@@ -21,8 +21,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 pub use crate::compile::{CompileRequest, TargetIr};
-use crate::dss::OptimizeRequest;
-pub use crate::dss::{CalibrateRequest, QuantizeRequest};
+pub use crate::dss::{CalibrateRequest, OptimizeRequest, QuantizeRequest};
 use crate::ClientError::ApiError;
 
 #[cfg(feature = "blocking")]

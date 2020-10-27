@@ -1,4 +1,7 @@
-use furiosa_client::{get_endpoint_from_env, ClientError, CompileRequest, FuriosaClient, TargetIr, FURIOSA_API_ENDPOINT_ENV, CalibrateRequest, QuantizeRequest};
+use furiosa_client::{
+    get_endpoint_from_env, CalibrateRequest, ClientError, CompileRequest, FuriosaClient,
+    OptimizeRequest, QuantizeRequest, TargetIr, FURIOSA_API_ENDPOINT_ENV,
+};
 use serde_json::Value;
 use std::io;
 
@@ -76,19 +79,45 @@ async fn test_compile_with_target_ir() {
 
 #[tokio::test]
 #[ignore]
-async fn test_build_calibration_model() -> io::Result<()> {
+async fn test_optimize() -> io::Result<()> {
     env_logger::init();
+
+    let client = FuriosaClient::new().unwrap();
 
     let orig_model = tokio::fs::read("models/quantization/test.onnx").await?;
 
-    let calibration_req = CalibrateRequest {
-        source: orig_model,
-        filename: "test.onnx".to_string(),
-        input_tensors: vec!["input".to_string()]
-    };
+    let optimize_req =
+        OptimizeRequest { source: orig_model, filename: "optimized.onnx".to_string() };
+
+    let result = client.optimize(optimize_req).await;
+    assert!(result.is_ok(), format!("{:?}", result.err()));
+
+    Ok(())
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_build_calibration_model() -> io::Result<()> {
+    env_logger::init();
 
     let client = FuriosaClient::new().unwrap();
-    let result = client.calibrate(calibration_req).await;
+
+    let orig_model = tokio::fs::read("models/quantization/test.onnx").await?;
+
+    let optimize_req =
+        OptimizeRequest { source: orig_model, filename: "optimized.onnx".to_string() };
+
+    let result = client.optimize(optimize_req).await;
+    assert!(result.is_ok(), format!("{:?}", result.err()));
+    let optimized_model = result.unwrap().to_vec();
+
+    let calibration_req = CalibrateRequest {
+        source: optimized_model,
+        filename: "test.onnx".to_string(),
+        input_tensors: vec!["input".to_string()],
+    };
+
+    let result = client.build_calibration_model(calibration_req).await;
     assert!(result.is_ok(), format!("{:?}", result.err()));
 
     Ok(())
@@ -99,9 +128,19 @@ async fn test_build_calibration_model() -> io::Result<()> {
 async fn test_quantize() -> io::Result<()> {
     env_logger::init();
 
+    let client = FuriosaClient::new().unwrap();
+
     let orig_model = tokio::fs::read("models/quantization/test.onnx").await?;
+
+    let optimize_req =
+        OptimizeRequest { source: orig_model, filename: "optimized.onnx".to_string() };
+
+    let result = client.optimize(optimize_req).await;
+    assert!(result.is_ok(), format!("{:?}", result.err()));
+    let optimized_model = result.unwrap().to_vec();
+
     let dynamic_ranges = serde_json::from_str(
-r#"{
+        r#"{
   "input": [
     4.337553946243133e-06,
     0.9999983906745911
@@ -131,10 +170,12 @@ r#"{
     1.0805176496505737
   ]
 }
-"#).expect("fail to parse JSON");
+"#,
+    )
+    .expect("fail to parse JSON");
 
     let quantize_req = QuantizeRequest {
-        source: orig_model,
+        source: optimized_model,
         filename: "test.onnx".to_string(),
         input_tensors: vec!["input".to_string()],
         dynamic_ranges,
