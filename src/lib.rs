@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 pub use crate::compile::{CompileRequest, TargetIr};
-pub use crate::dss::{CalibrateRequest, QuantizeRequest};
+pub use crate::dss::{CalibrateRequest, OptimizeRequest, QuantizeRequest};
 use crate::ClientError::ApiError;
 
 #[cfg(feature = "blocking")]
@@ -221,6 +221,46 @@ impl FuriosaClient {
                         Ok(bytes) => Ok(bytes.to_vec().into_boxed_slice()),
                         Err(e) => {
                             Err(ApiError(format!("fail to fetch the compiled binary: {}", e)))
+                        }
+                    }
+                } else {
+                    let response: ApiResponse = match res.json().await {
+                        Ok(api_response) => api_response,
+                        Err(e) => return Err(ApiError(format!("fail to get API response: {}", e))),
+                    };
+                    Err(ApiError(format!("fail to compile: {}", &response.message)))
+                }
+            }
+            Err(e) => Err(ApiError(format!("{}", e))),
+        }
+    }
+
+    pub async fn optimize(&self, request: OptimizeRequest) -> Result<Box<[u8]>, ClientError> {
+        let mut model_image = Part::bytes(request.source);
+        model_image = model_image.file_name(request.filename);
+
+        model_image =
+            model_image.mime_str(APPLICATION_OCTET_STREAM_MIME).expect("Invalid MIME type");
+
+        let form: Form = Form::new().part(SOURCE_PART_NAME, model_image);
+
+        let response = self
+            .client
+            .post(&self.api_v1_path("dss/optimize"))
+            .header(REQUEST_ID_HTTP_HEADER, Uuid::new_v4().to_hyphenated().to_string())
+            .header(ACCESS_KEY_ID_HTTP_HEADER, &self.access_key_id)
+            .header(SECRET_ACCESS_KEY_HTTP_HEADER, &self.secret_access_key)
+            .multipart(form)
+            .send()
+            .await;
+
+        match response {
+            Ok(res) => {
+                if res.status().is_success() {
+                    match res.bytes().await {
+                        Ok(bytes) => Ok(bytes.to_vec().into_boxed_slice()),
+                        Err(e) => {
+                            Err(ApiError(format!("fail to fetch the calibration onnx: {}", e)))
                         }
                     }
                 } else {
