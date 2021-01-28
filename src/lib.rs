@@ -38,6 +38,11 @@ static APPLICATION_OCTET_STREAM_MIME: &str = "application/octet-stream";
 static ACCESS_KEY_ID_HTTP_HEADER: &str = "X-FuriosaAI-Access-Key-ID";
 static SECRET_ACCESS_KEY_HTTP_HEADER: &str = "X-FuriosaAI-Secret-Access-KEY";
 static REQUEST_ID_HTTP_HEADER: &str = "X-Request-Id";
+static FURIOSA_API_VERSION_HEADER: &str = "X-FuriosaAI-API-Version";
+static FURIOSA_API_VERSION_VALUE: &str = "1";
+static FURIOSA_SDK_VERSION_HEADER: &str = "X-FuriosaAI-SDK-Version";
+static FURIOSA_SDK_VERSION_VALUE: &str = "0.2.0";
+
 lazy_static! {
     pub static ref FURIOSA_CLIENT_USER_AGENT: String = {
         let mut user_agent = String::from("FuriosaAI Rust Client (ver.");
@@ -210,6 +215,8 @@ impl FuriosaClient {
             .header(REQUEST_ID_HTTP_HEADER, Uuid::new_v4().to_hyphenated().to_string())
             .header(ACCESS_KEY_ID_HTTP_HEADER, &self.access_key_id)
             .header(SECRET_ACCESS_KEY_HTTP_HEADER, &self.secret_access_key)
+            .header(FURIOSA_API_VERSION_HEADER, FURIOSA_API_VERSION_VALUE)
+            .header(FURIOSA_SDK_VERSION_HEADER, FURIOSA_SDK_VERSION_VALUE)
             .multipart(form)
             .send()
             .await;
