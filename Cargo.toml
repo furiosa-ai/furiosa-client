@@ -1,6 +1,6 @@
 [package]
 name = "furiosa-client"
-version = "0.3.4"
+version = "0.3.5"
 authors = ["Furiosa.AI"]
 edition = "2018"
 
