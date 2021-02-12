@@ -37,7 +37,7 @@ fn test_blocking_compile_with_default() {
     let request = CompileRequest::new(target_npu_spec, binary).compile_config(compiler_config);
 
     let result = client.compile(request);
-    assert!(result.is_ok(), format!("{:?}", result.err()));
+    assert!(result.is_ok(), "{:?}", result);
 }
 
 #[tokio::test]
@@ -56,7 +56,7 @@ async fn test_compile_with_default() {
     let request = CompileRequest::new(target_npu_spec, &binary).compile_config(compiler_config);
 
     let result = client.compile(request).await;
-    assert!(result.is_ok(), format!("{:?}", result.err()));
+    assert!(result.is_ok(), "{:?}", result);
 }
 
 #[tokio::test]
@@ -77,7 +77,7 @@ async fn test_compile_with_target_ir() {
         .target_ir(TargetIr::Lir);
 
     let result = client.compile(request).await;
-    assert!(result.is_ok(), format!("{:?}", result.err()));
+    assert!(result.is_ok(), "{:?}", result);
 }
 
 #[tokio::test]
@@ -93,7 +93,7 @@ async fn test_optimize() -> io::Result<()> {
         OptimizeRequest { source: orig_model, filename: "optimized.onnx".to_string() };
 
     let result = client.optimize(optimize_req).await;
-    assert!(result.is_ok(), format!("{:?}", result.err()));
+    assert!(result.is_ok(), "{:?}", result);
 
     Ok(())
 }
@@ -111,7 +111,7 @@ async fn test_build_calibration_model() -> io::Result<()> {
         OptimizeRequest { source: orig_model, filename: "optimized.onnx".to_string() };
 
     let result = client.optimize(optimize_req).await;
-    assert!(result.is_ok(), format!("{:?}", result.err()));
+    assert!(result.is_ok(), "{:?}", result);
     let optimized_model = result.unwrap().to_vec();
 
     let calibration_req = CalibrateRequest {
@@ -121,7 +121,7 @@ async fn test_build_calibration_model() -> io::Result<()> {
     };
 
     let result = client.build_calibration_model(calibration_req).await;
-    assert!(result.is_ok(), format!("{:?}", result.err()));
+    assert!(result.is_ok(), "{:?}", result);
 
     Ok(())
 }
@@ -139,7 +139,7 @@ async fn test_quantize() -> io::Result<()> {
         OptimizeRequest { source: orig_model, filename: "optimized.onnx".to_string() };
 
     let result = client.optimize(optimize_req).await;
-    assert!(result.is_ok(), format!("{:?}", result.err()));
+    assert!(result.is_ok(), "{:?}", result);
     let optimized_model = result.unwrap().to_vec();
 
     let dynamic_ranges = serde_json::from_str(
@@ -186,7 +186,7 @@ async fn test_quantize() -> io::Result<()> {
 
     let client = FuriosaClient::new().unwrap();
     let result = client.quantize(quantize_req).await;
-    assert!(result.is_ok(), format!("{:?}", result.err()));
+    assert!(result.is_ok(), "{:?}", result);
 
     Ok(())
 }
