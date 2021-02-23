@@ -14,7 +14,7 @@ blocking = []
 [dependencies]
 dirs = "3.0.1"
 dotenv = "0.15.0"
-log = "0.4.11"
+log = "0.4.14"
 lazy_static = "1.4.0"
 thiserror = "1.0.20"
 reqwest = { version = "0.10.8", features = ["json"] }
