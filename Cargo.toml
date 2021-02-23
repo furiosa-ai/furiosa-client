@@ -25,4 +25,4 @@ tokio = { version = "0.2.22", features = ["full"] }
 uuid = { version = "0.8.1", features = ["v4"] }
 
 [dev-dependencies]
-env_logger = "0.7.1"
+env_logger = "0.8.3"
