@@ -1,6 +1,6 @@
 [package]
 name = "furiosa-client"
-version = "0.3.5"
+version = "0.3.6"
 authors = ["Furiosa.AI"]
 edition = "2018"
 
@@ -12,6 +12,7 @@ default = []
 blocking = []
 
 [dependencies]
+bytes = "1.0.1"
 dirs = "3.0.1"
 dotenv = "0.15.0"
 log = "0.4.14"

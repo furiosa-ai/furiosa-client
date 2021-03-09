@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+use serde::Deserialize;
 use serde_json::Value;
 
 #[derive(Copy, Clone)]
@@ -61,5 +62,31 @@ impl CompileRequest {
     pub fn filename(mut self, filename: &str) -> CompileRequest {
         self.filename = String::from(filename);
         self
+    }
+}
+
+#[derive(Deserialize)]
+pub struct CompileTask {
+    pub version: i32,
+    pub task_id: String,
+    pub phase: CompileTaskPhase,
+    pub submit_time: i64,
+    pub start_time: Option<i64>,
+    pub finish_time: Option<i64>,
+    pub progress: f32,
+    pub error_message: Option<String>,
+}
+
+#[derive(Deserialize, Eq, PartialEq)]
+pub enum CompileTaskPhase {
+    Pending,
+    Running,
+    Succeeded,
+    Failed,
+}
+
+impl CompileTaskPhase {
+    pub fn is_completed(&self) -> bool {
+        self == &CompileTaskPhase::Succeeded || self == &CompileTaskPhase::Failed
     }
 }

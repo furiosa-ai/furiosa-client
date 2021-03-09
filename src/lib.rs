@@ -13,16 +13,20 @@
 use std::env::VarError;
 use std::io;
 use std::path::PathBuf;
+use std::time::Duration;
 
+use bytes::Bytes;
 use lazy_static::lazy_static;
 use log::{error, info};
 use reqwest::multipart::{Form, Part};
+use reqwest::{RequestBuilder, Response};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 pub use crate::compile::{CompileRequest, TargetIr};
+use crate::compile::{CompileTask, CompileTaskPhase};
 pub use crate::dss::{CalibrateRequest, OptimizeRequest, QuantizeRequest};
-use crate::ClientError::ApiError;
+use crate::ClientError::{ApiError, CompilationFailed};
 
 #[cfg(feature = "blocking")]
 pub mod blocking;
@@ -38,10 +42,8 @@ static APPLICATION_OCTET_STREAM_MIME: &str = "application/octet-stream";
 static ACCESS_KEY_ID_HTTP_HEADER: &str = "X-FuriosaAI-Access-Key-ID";
 static SECRET_ACCESS_KEY_HTTP_HEADER: &str = "X-FuriosaAI-Secret-Access-KEY";
 static REQUEST_ID_HTTP_HEADER: &str = "X-Request-Id";
-static FURIOSA_API_VERSION_HEADER: &str = "X-FuriosaAI-API-Version";
-static FURIOSA_API_VERSION_VALUE: &str = "1";
 static FURIOSA_SDK_VERSION_HEADER: &str = "X-FuriosaAI-SDK-Version";
-static FURIOSA_SDK_VERSION_VALUE: &str = "0.2.0";
+static FURIOSA_SDK_VERSION_VALUE: &str = "0.2.1";
 
 lazy_static! {
     pub static ref FURIOSA_CLIENT_USER_AGENT: String = {
@@ -71,6 +73,8 @@ pub enum ClientError {
     NoApiKey,
     #[error("ApiError: {0}")]
     ApiError(String),
+    #[error("Compilation failed:\n{0}")]
+    CompilationFailed(String),
 }
 
 impl ClientError {
@@ -158,6 +162,13 @@ pub fn get_endpoint_from_env() -> Result<String, ClientError> {
     }
 }
 
+#[derive(Deserialize)]
+pub struct VersionInfo {
+    pub version: String,
+    pub revision: String,
+    pub build_time: String,
+}
+
 impl FuriosaClient {
     pub fn new() -> Result<FuriosaClient, ClientError> {
         // Try to read $HOME/.furiosa/config including extra configurations
@@ -180,13 +191,35 @@ impl FuriosaClient {
         Ok(FuriosaClient { client, endpoint, access_key_id, secret_access_key })
     }
 
+    fn set_default_headers(&self, b: RequestBuilder) -> RequestBuilder {
+        b.header(ACCESS_KEY_ID_HTTP_HEADER, &self.access_key_id)
+            .header(SECRET_ACCESS_KEY_HTTP_HEADER, &self.secret_access_key)
+            .header(FURIOSA_SDK_VERSION_HEADER, FURIOSA_SDK_VERSION_VALUE)
+    }
+
+    #[inline]
+    fn api_root_path(&self, path: &str) -> String {
+        format!("{}/{}", &self.endpoint, path)
+    }
+
     #[inline]
     fn api_v1_path(&self, path: &str) -> String {
-        format!("{}/{}", &self.endpoint, path)
+        format!("{}/api/v1/{}", &self.endpoint, path)
+    }
+
+    #[inline]
+    fn api_v1alpha_path(&self, api: &str, path: &str) -> String {
+        format!("{}/api/{}/v1alpha1/{}", &self.endpoint, api, path)
     }
 
     pub fn endpoint(&self) -> &str {
         &self.endpoint
+    }
+
+    pub async fn server_version(&self) -> Result<VersionInfo, ClientError> {
+        let path = &self.api_root_path("version");
+        let response = self.client.get(path).send().await;
+        make_response(path, response, |bytes| Ok(serde_json::from_slice(&bytes).unwrap())).await
     }
 
     pub async fn compile(&self, request: CompileRequest) -> Result<Box<[u8]>, ClientError> {
@@ -209,36 +242,54 @@ impl FuriosaClient {
                 .text(COMPILER_CONFIG_PART_NAME, serde_json::to_string(compiler_config).unwrap());
         };
 
-        let response = self
+        let path = &self.api_v1alpha_path("compiler", "tasks");
+        let req = self
             .client
-            .post(&self.api_v1_path("compiler"))
-            .header(REQUEST_ID_HTTP_HEADER, Uuid::new_v4().to_hyphenated().to_string())
-            .header(ACCESS_KEY_ID_HTTP_HEADER, &self.access_key_id)
-            .header(SECRET_ACCESS_KEY_HTTP_HEADER, &self.secret_access_key)
-            .header(FURIOSA_API_VERSION_HEADER, FURIOSA_API_VERSION_VALUE)
-            .header(FURIOSA_SDK_VERSION_HEADER, FURIOSA_SDK_VERSION_VALUE)
-            .multipart(form)
-            .send()
-            .await;
+            .post(path)
+            .header(REQUEST_ID_HTTP_HEADER, Uuid::new_v4().to_hyphenated().to_string());
+        let response = self.set_default_headers(req).multipart(form).send().await;
 
-        match response {
-            Ok(res) => {
-                if res.status().is_success() {
-                    match res.bytes().await {
-                        Ok(bytes) => Ok(bytes.to_vec().into_boxed_slice()),
-                        Err(e) => {
-                            Err(ApiError(format!("fail to fetch the compiled binary: {}", e)))
-                        }
-                    }
-                } else {
-                    let response: ApiResponse = match res.json().await {
-                        Ok(api_response) => api_response,
-                        Err(e) => return Err(ApiError(format!("fail to get API response: {}", e))),
-                    };
-                    Err(ApiError(format!("fail to compile: {}", &response.message)))
-                }
+        let mut task: CompileTask =
+            make_response(path, response, |bytes| Ok(serde_json::from_slice(&bytes).unwrap()))
+                .await?;
+
+        let task_id = task.task_id;
+
+        loop {
+            if task.phase.is_completed() {
+                break;
             }
-            Err(e) => Err(ApiError(format!("{}", e))),
+
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            let path = self.api_v1alpha_path("compiler", &format!("tasks/{}", &task_id));
+            let response = self.set_default_headers(self.client.get(&path)).send().await;
+            task =
+                make_response(&path, response, |bytes| Ok(serde_json::from_slice(&bytes).unwrap()))
+                    .await?;
+        }
+
+        match &task.phase {
+            CompileTaskPhase::Succeeded => {
+                let path = self.api_v1alpha_path(
+                    "compiler",
+                    &format!("tasks/{}/artifacts/output.enf", &task_id),
+                );
+                let response = self.set_default_headers(self.client.get(&path)).send().await;
+                return make_response(&path, response, |bytes| {
+                    Ok(bytes.to_vec().into_boxed_slice())
+                })
+                .await;
+            }
+            CompileTaskPhase::Failed => {
+                let path = self.api_v1alpha_path("compiler", &format!("tasks/{}/logs", &task_id));
+                let response = self.set_default_headers(self.client.get(&path)).send().await;
+                let log_message: String = make_response(&path, response, |bytes| {
+                    Ok(String::from_utf8_lossy(&bytes).to_string())
+                })
+                .await?;
+                Err(CompilationFailed(log_message))
+            }
+            _ => unreachable!("cannot reach non-terminal phase"),
         }
     }
 
@@ -250,16 +301,11 @@ impl FuriosaClient {
             model_image.mime_str(APPLICATION_OCTET_STREAM_MIME).expect("Invalid MIME type");
 
         let form: Form = Form::new().part(SOURCE_PART_NAME, model_image);
-
-        let response = self
+        let request = self
             .client
             .post(&self.api_v1_path("dss/optimize"))
-            .header(REQUEST_ID_HTTP_HEADER, Uuid::new_v4().to_hyphenated().to_string())
-            .header(ACCESS_KEY_ID_HTTP_HEADER, &self.access_key_id)
-            .header(SECRET_ACCESS_KEY_HTTP_HEADER, &self.secret_access_key)
-            .multipart(form)
-            .send()
-            .await;
+            .header(REQUEST_ID_HTTP_HEADER, Uuid::new_v4().to_hyphenated().to_string());
+        let response = self.set_default_headers(request).multipart(form).send().await;
 
         match response {
             Ok(res) => {
@@ -298,11 +344,12 @@ impl FuriosaClient {
         let form: Form = Form::new()
             .text(DSS_INPUT_TENSORS_PART_NAME, input_tensors)
             .part(SOURCE_PART_NAME, model_image);
-
-        let response = self
+        let request = self
             .client
             .post(&self.api_v1_path("dss/build-calibration-model"))
-            .header(REQUEST_ID_HTTP_HEADER, Uuid::new_v4().to_hyphenated().to_string())
+            .header(REQUEST_ID_HTTP_HEADER, Uuid::new_v4().to_hyphenated().to_string());
+        let response = self
+            .set_default_headers(request)
             .header(ACCESS_KEY_ID_HTTP_HEADER, &self.access_key_id)
             .header(SECRET_ACCESS_KEY_HTTP_HEADER, &self.secret_access_key)
             .multipart(form)
@@ -348,15 +395,11 @@ impl FuriosaClient {
             .text(DSS_DYNAMIC_RANGES_PART_NAME, dynamic_ranges)
             .part(SOURCE_PART_NAME, model_image);
 
-        let response = self
+        let request = self
             .client
             .post(&self.api_v1_path("dss/quantize"))
-            .header(REQUEST_ID_HTTP_HEADER, Uuid::new_v4().to_hyphenated().to_string())
-            .header(ACCESS_KEY_ID_HTTP_HEADER, &self.access_key_id)
-            .header(SECRET_ACCESS_KEY_HTTP_HEADER, &self.secret_access_key)
-            .multipart(form)
-            .send()
-            .await;
+            .header(REQUEST_ID_HTTP_HEADER, Uuid::new_v4().to_hyphenated().to_string());
+        let response = self.set_default_headers(request).multipart(form).send().await;
 
         match response {
             Ok(res) => {
@@ -375,5 +418,36 @@ impl FuriosaClient {
             }
             Err(e) => Err(ApiError(format!("{}", e))),
         }
+    }
+}
+
+async fn make_response<F, T>(
+    path: &str,
+    response: Result<Response, reqwest::Error>,
+    f: F,
+) -> Result<T, ClientError>
+where
+    F: Fn(Bytes) -> Result<T, ClientError>,
+{
+    match response {
+        Ok(response) => {
+            if response.status().is_success() {
+                match response.bytes().await {
+                    Ok(bytes) => f(bytes),
+                    Err(e) => Err(ApiError(format!("fail to deserialize the bytes: {}", e))),
+                }
+            } else {
+                let err_response: ApiResponse = match response.json().await {
+                    Ok(api_response) => api_response,
+                    Err(e) => {
+                        let msg =
+                            format!("fail to deserialize the error response from {}: {}", path, e);
+                        return Err(ApiError(msg));
+                    }
+                };
+                Err(ApiError(format!("fail to call API {}: {}", path, &err_response.message)))
+            }
+        }
+        Err(e) => Err(ApiError(format!("{}", e))),
     }
 }

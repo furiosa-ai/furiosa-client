@@ -1,9 +1,20 @@
 use furiosa_client::{
     get_endpoint_from_env, CalibrateRequest, ClientError, CompileRequest, FuriosaClient,
-    OptimizeRequest, QuantizeRequest, TargetIr, FURIOSA_API_ENDPOINT_ENV,
+    OptimizeRequest, QuantizeRequest, TargetIr, VersionInfo, FURIOSA_API_ENDPOINT_ENV,
 };
 use serde_json::Value;
 use std::io;
+
+#[tokio::test]
+async fn test_version() -> Result<(), ClientError> {
+    env_logger::init();
+
+    let client = FuriosaClient::new().unwrap();
+    let server_version: VersionInfo = client.server_version().await?;
+    assert_eq!(&server_version.version, "0.2.0");
+
+    Ok(())
+}
 
 #[test]
 fn test_get_endpoint_from_env() -> Result<(), ClientError> {
@@ -41,7 +52,6 @@ fn test_blocking_compile_with_default() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn test_compile_with_default() {
     env_logger::init();
 
@@ -57,6 +67,7 @@ async fn test_compile_with_default() {
 
     let result = client.compile(request).await;
     assert!(result.is_ok(), "{:?}", result);
+    assert_eq!(result.ok().unwrap().len(), 90797);
 }
 
 #[tokio::test]
