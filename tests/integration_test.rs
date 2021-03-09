@@ -6,6 +6,7 @@ use serde_json::Value;
 use std::io;
 
 #[tokio::test]
+#[ignore]
 async fn test_version() -> Result<(), ClientError> {
     env_logger::init();
 
@@ -52,6 +53,7 @@ fn test_blocking_compile_with_default() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_compile_with_default() {
     env_logger::init();
 

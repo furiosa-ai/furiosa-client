@@ -260,7 +260,7 @@ impl FuriosaClient {
                 break;
             }
 
-            tokio::time::sleep(Duration::from_millis(500)).await;
+            tokio::time::delay_for(Duration::from_millis(500)).await;
             let path = self.api_v1alpha_path("compiler", &format!("tasks/{}", &task_id));
             let response = self.set_default_headers(self.client.get(&path)).send().await;
             task =
