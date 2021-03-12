@@ -36,7 +36,7 @@ mod dss;
 pub static FURIOSA_API_ENDPOINT_ENV: &str = "FURIOSA_API_ENDPOINT";
 static ACCESS_KEY_ID_ENV: &str = "FURIOSA_ACCESS_KEY_ID";
 static SECRET_ACCESS_KEY_ENV: &str = "FURIOSA_SECRET_ACCESS_KEY";
-static DEFAULT_FURIOSA_API_ENDPOINT: &str = "https://api.furiosa.ai/api/v1";
+static DEFAULT_FURIOSA_API_ENDPOINT: &str = "https://api.furiosa.ai";
 
 static APPLICATION_OCTET_STREAM_MIME: &str = "application/octet-stream";
 static ACCESS_KEY_ID_HTTP_HEADER: &str = "X-FuriosaAI-Access-Key-ID";
