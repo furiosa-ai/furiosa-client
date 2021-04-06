@@ -7,8 +7,6 @@ use std::io;
 
 #[tokio::test]
 async fn test_version() -> Result<(), ClientError> {
-    env_logger::init();
-
     let client = FuriosaClient::new().unwrap();
     let server_version: VersionInfo = client.server_version().await?;
     assert_eq!(&server_version.version, "0.2.0");
@@ -53,8 +51,6 @@ fn test_blocking_compile_with_default() {
 
 #[tokio::test]
 async fn test_compile_with_default() {
-    env_logger::init();
-
     let target_npu_spec: Value =
         serde_yaml::from_str(include_str!("../configs/64dpes.yml")).unwrap();
     let compiler_config: Value = serde_json::from_str("{}").unwrap();
