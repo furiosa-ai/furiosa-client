@@ -7,7 +7,7 @@ use std::io;
 
 #[tokio::test]
 async fn test_version() -> Result<(), ClientError> {
-    let client = FuriosaClient::new().unwrap();
+    let client = FuriosaClient::new("0.2.1").unwrap();
     let server_version: VersionInfo = client.server_version().await?;
     assert_eq!(&server_version.version, "0.2.0");
 
@@ -40,7 +40,7 @@ fn test_blocking_compile_with_default() {
         serde_yaml::from_str(include_str!("../configs/64dpes.yml")).unwrap();
     let compiler_config: Value = serde_json::from_str("{}").unwrap();
 
-    let client = blocking::FuriosaClient::new().unwrap();
+    let client = blocking::FuriosaClient::new("0.2.1").unwrap();
     let binary = std::fs::read("models/tflite/MNISTnet_uint8_quant_without_softmax.tflite")
         .expect("fail to read");
     let request = CompileRequest::new(target_npu_spec, binary).compile_config(compiler_config);
@@ -55,7 +55,7 @@ async fn test_compile_with_default() {
         serde_yaml::from_str(include_str!("../configs/64dpes.yml")).unwrap();
     let compiler_config: Value = serde_json::from_str("{}").unwrap();
 
-    let client = FuriosaClient::new().unwrap();
+    let client = FuriosaClient::new("0.2.1").unwrap();
     let binary = tokio::fs::read("models/tflite/MNISTnet_uint8_quant_without_softmax.tflite")
         .await
         .expect("fail to read");
@@ -75,7 +75,7 @@ async fn test_compile_with_target_ir() {
         serde_yaml::from_str(include_str!("../configs/64dpes.yml")).unwrap();
     let compiler_config: Value = serde_json::from_str("{}").unwrap();
 
-    let client = FuriosaClient::new().unwrap();
+    let client = FuriosaClient::new("0.2.1").unwrap();
     let binary = tokio::fs::read("models/tflite/MNISTnet_uint8_quant_without_softmax.tflite")
         .await
         .expect("fail to read");
@@ -92,7 +92,7 @@ async fn test_compile_with_target_ir() {
 async fn test_optimize() -> io::Result<()> {
     env_logger::init();
 
-    let client = FuriosaClient::new().unwrap();
+    let client = FuriosaClient::new("0.2.1").unwrap();
 
     let orig_model = tokio::fs::read("models/quantization/test.onnx").await?;
 
@@ -110,7 +110,7 @@ async fn test_optimize() -> io::Result<()> {
 async fn test_build_calibration_model() -> io::Result<()> {
     env_logger::init();
 
-    let client = FuriosaClient::new().unwrap();
+    let client = FuriosaClient::new("0.2.1").unwrap();
 
     let orig_model = tokio::fs::read("models/quantization/test.onnx").await?;
 
@@ -138,7 +138,7 @@ async fn test_build_calibration_model() -> io::Result<()> {
 async fn test_quantize() -> io::Result<()> {
     env_logger::init();
 
-    let client = FuriosaClient::new().unwrap();
+    let client = FuriosaClient::new("0.2.1").unwrap();
 
     let orig_model = tokio::fs::read("models/quantization/test.onnx").await?;
 
@@ -191,7 +191,7 @@ async fn test_quantize() -> io::Result<()> {
         dynamic_ranges,
     };
 
-    let client = FuriosaClient::new().unwrap();
+    let client = FuriosaClient::new("0.2.1").unwrap();
     let result = client.quantize(quantize_req).await;
     assert!(result.is_ok(), "{:?}", result);
 

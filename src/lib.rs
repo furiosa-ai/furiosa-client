@@ -27,6 +27,7 @@ pub use crate::compile::{CompileRequest, TargetIr};
 use crate::compile::{CompileTask, CompileTaskPhase};
 pub use crate::dss::{CalibrateRequest, OptimizeRequest, QuantizeRequest};
 use crate::ClientError::{ApiError, CompilationFailed};
+use semver::Version;
 
 #[cfg(feature = "blocking")]
 pub mod blocking;
@@ -43,7 +44,6 @@ static ACCESS_KEY_ID_HTTP_HEADER: &str = "X-FuriosaAI-Access-Key-ID";
 static SECRET_ACCESS_KEY_HTTP_HEADER: &str = "X-FuriosaAI-Secret-Access-KEY";
 static REQUEST_ID_HTTP_HEADER: &str = "X-Request-Id";
 static FURIOSA_SDK_VERSION_HEADER: &str = "X-FuriosaAI-SDK-Version";
-static FURIOSA_SDK_VERSION_VALUE: &str = "0.2.1";
 
 lazy_static! {
     pub static ref FURIOSA_CLIENT_USER_AGENT: String = {
@@ -75,6 +75,8 @@ pub enum ClientError {
     ApiError(String),
     #[error("Compilation failed:\n{0}")]
     CompilationFailed(String),
+    #[error("Invalid runtime version:\n{0}")]
+    InvalidRuntimeVersion(String),
 }
 
 impl ClientError {
@@ -113,6 +115,7 @@ pub struct FuriosaClient {
     endpoint: String,
     access_key_id: String,
     secret_access_key: String,
+    runtime_version: String,
 }
 
 fn config_file_path(file: &str) -> Option<PathBuf> {
@@ -170,11 +173,16 @@ pub struct VersionInfo {
 }
 
 impl FuriosaClient {
-    pub fn new() -> Result<FuriosaClient, ClientError> {
+    pub fn new<S: AsRef<str>>(runtime_version: S) -> Result<FuriosaClient, ClientError> {
         // Try to read $HOME/.furiosa/config including extra configurations
         load_config_file("config")?;
         // Try to read $HOME/.furiosa/credential and set credentials to environment variables
         load_config_file("credential")?;
+
+        let runtime_version = match Version::parse(runtime_version.as_ref()) {
+            Ok(ver) => format!("{}.{}.{}", ver.major, ver.minor, ver.patch),
+            Err(e) => return Err(ClientError::InvalidRuntimeVersion(format!("{}", e))),
+        };
 
         // Try to get both API KEYs and exist if KEYs are not set
         let access_key_id = std::env::var(ACCESS_KEY_ID_ENV).map_err(|_| ClientError::NoApiKey)?;
@@ -188,13 +196,13 @@ impl FuriosaClient {
             .expect("fail to create HTTP Client");
 
         info!("Connecting API Endpoint: {}", &endpoint);
-        Ok(FuriosaClient { client, endpoint, access_key_id, secret_access_key })
+        Ok(FuriosaClient { client, endpoint, access_key_id, secret_access_key, runtime_version })
     }
 
     fn set_default_headers(&self, b: RequestBuilder) -> RequestBuilder {
         b.header(ACCESS_KEY_ID_HTTP_HEADER, &self.access_key_id)
             .header(SECRET_ACCESS_KEY_HTTP_HEADER, &self.secret_access_key)
-            .header(FURIOSA_SDK_VERSION_HEADER, FURIOSA_SDK_VERSION_VALUE)
+            .header(FURIOSA_SDK_VERSION_HEADER, self.runtime_version.clone())
     }
 
     #[inline]
