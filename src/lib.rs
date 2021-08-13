@@ -77,6 +77,8 @@ pub enum ClientError {
     CompilationFailed(String),
     #[error("Invalid runtime version:\n{0}")]
     InvalidRuntimeVersion(String),
+    #[error("Invalid target ir:\n{0}")]
+    InvalidTargetIr(String),
 }
 
 impl ClientError {

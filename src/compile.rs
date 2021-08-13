@@ -1,7 +1,9 @@
 use std::borrow::Cow;
 
+use crate::ClientError;
 use serde::Deserialize;
 use serde_json::Value;
+use std::str::FromStr;
 
 #[derive(Copy, Clone)]
 pub enum TargetIr {
@@ -24,6 +26,24 @@ impl TargetIr {
             Lir => "lir",
             Enf => "enf",
         }
+    }
+}
+
+impl FromStr for TargetIr {
+    type Err = ClientError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use TargetIr::*;
+        let target_ir = match s.to_lowercase().as_str() {
+            "dfg" => Dfg,
+            "ldfg" => Ldfg,
+            "cdfg" => Cdfg,
+            "gir" => Gir,
+            "lir" => Lir,
+            "enf" => Enf,
+            _ => return Err(ClientError::InvalidTargetIr(s.to_string())),
+        };
+        Ok(target_ir)
     }
 }
 
